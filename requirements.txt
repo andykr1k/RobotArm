@@ -1,0 +1,3 @@
+opencv-python
+mediapipe
+adafruit-circuitpython-pca9685
