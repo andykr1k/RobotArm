@@ -2,6 +2,24 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from controller import RobotArm
+import time
+import board
+from adafruit_motor import servo
+from adafruit_pca9685 import PCA9685
+
+# Initialize I2C interface and PCA9685 instance
+i2c = board.I2C()  # uses board.SCL and board.SDA
+pca = PCA9685(i2c)
+pca.frequency = 50  # Set frequency to 50Hz for servos
+
+# Set min_pulse and max_pulse for 180-degree movement
+min_pulse = 500   # ~1ms pulse width (0 degrees)
+max_pulse = 2400  # ~2.4ms pulse width (180 degrees)
+
+# Create servo objects for channels 4, 5, and 6 with the adjusted pulse range
+mid = servo.Servo(pca.channels[4], min_pulse=min_pulse, max_pulse=max_pulse)
+tip = servo.Servo(pca.channels[5], min_pulse=min_pulse, max_pulse=max_pulse)
+
 
 arm = RobotArm()
 
@@ -99,9 +117,12 @@ while cap.isOpened():
             cv2.putText(frame, f'{int(angle_base)} deg', (points[0][0] - 70, points[0][1] + 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
-            arm.move_tip_joint(angle_top)
-            arm.move_middle_joint(angle_middle)
-            arm.move_base_joint(angle_base)
+            tip.angle(180 - angle_top)
+            mid.angle(180 - angle_middle)
+            time.sleep(1)
+            # arm.move_tip_joint(angle_top)
+            # arm.move_middle_joint(angle_middle)
+            # arm.move_base_joint(angle_base)
 
     # Draw the status box at the top left
     box_color = (0, 255, 0) if hand_detected else (
@@ -120,3 +141,4 @@ while cap.isOpened():
 # Release the capture and close windows
 cap.release()
 cv2.destroyAllWindows()
+pca.deinit()
