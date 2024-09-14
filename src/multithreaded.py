@@ -105,11 +105,38 @@ def process_camera_feed():
                 points = [(int(point[0] * width), int(point[1] * height))
                           for point in points]
 
-                # Calculate angles
+                # Names of points for display
+                point_names = ["MCP", "PIP", "DIP", "Tip", "Wrist"]
+
+                # Draw red lines connecting index finger joints
+                for i in range(len(points) - 2):  # Skip wrist connection for now
+                    cv2.line(frame, points[i], points[i + 1],
+                            (0, 0, 255), 2)  # Red line
+
+                # Draw circles on joints and display point names
+                for i, point in enumerate(points):
+                    cv2.circle(frame, point, 5, (0, 255, 0), -1)  # Green circles
+                    cv2.putText(frame, point_names[i], (point[0] + 10, point[1] - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+                # Calculate angles and display them on the frame
+                # Angle 1: Top Finger (Tip -> DIP -> PIP)
                 angle_top = calculate_angle(
                     points[2], points[1], points[3])  # DIP joint angle
+                # Angle 2: Middle Finger (DIP -> PIP -> MCP)
                 angle_middle = calculate_angle(
                     points[1], points[0], points[2])  # PIP joint angle
+                # Angle 3: Finger Base (PIP -> MCP -> Wrist)
+                angle_base = calculate_angle(
+                    points[0], points[1], points[4])  # MCP joint angle
+
+                # Display angles on the frame next to each point
+                cv2.putText(frame, f'{int(angle_top)} deg', (points[2][0] - 70, points[2][1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(frame, f'{int(angle_middle)} deg', (points[1][0] - 70, points[1][1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(frame, f'{int(angle_base)} deg', (points[0][0] - 70, points[0][1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
                 # Update servo angles (use smooth_move to avoid blocking)
                 threading.Thread(target=smooth_move, args=(
