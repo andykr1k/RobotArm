@@ -17,6 +17,9 @@ def send_to_esp(command):
     time.sleep(4)
     read_from_esp()
 
-send_to_esp("{4:0},{5:0}")
-send_to_esp("{4:45},{5:45}")
-send_to_esp("{4:0},{5:0}")
+
+send_to_esp("{7:0},{11:0},{15:0}")
+send_to_esp("{7:15},{11:15},{15:15}")
+send_to_esp("{7:30},{11:30},{15:30}")
+send_to_esp("{7:45},{11:45},{15:45}")
+send_to_esp("{7:0},{11:0},{15:0}")
