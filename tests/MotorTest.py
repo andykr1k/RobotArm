@@ -28,19 +28,19 @@ def move_servo(position):
         servo_channel.duty_cycle = max_pulse
 
 
-# Move servo back and forth
-try:
-    while True:
-        # Move to 0 degrees
-        move_servo(0)
-        time.sleep(1)  # Hold for 1 second
+# Move servo back and forth for 5 seconds
+start_time = time.time()
+while time.time() - start_time < 5:
+    # Move to 0 degrees
+    move_servo(0)
+    time.sleep(1)  # Hold for 1 second
 
-        # Move to 180 degrees
-        move_servo(180)
-        time.sleep(1)  # Hold for 1 second
-except KeyboardInterrupt:
-    # When interrupted, stop the servo by setting the duty cycle to 0
-    servo_channel.duty_cycle = 0
+    # Move to 180 degrees
+    move_servo(180)
+    time.sleep(1)  # Hold for 1 second
+
+# After 5 seconds, stop the servo by setting the duty cycle to 0
+servo_channel.duty_cycle = 0
 
 # Turn off the PCA9685
 pca.deinit()
