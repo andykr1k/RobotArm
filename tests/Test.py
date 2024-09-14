@@ -28,8 +28,32 @@ def move_servos(angle, delay=1):
 # Move servos to 0 degrees (home position)
 move_servos(0)
 
+# Move servos to 0 degrees (home position)
+move_servos(15)
+
 # Move servos to 180 degrees
-move_servos(90)
+move_servos(0)
+
+# Move servos to 180 degrees
+move_servos(30)
+
+# Move servos back to 0 degrees
+move_servos(0)
+
+# Move servos to 180 degrees
+move_servos(45)
+
+# Move servos back to 0 degrees
+move_servos(0)
+
+# Move servos to 180 degrees
+move_servos(60)
+
+# Move servos back to 0 degrees
+move_servos(0)
+
+# Move servos to 180 degrees
+move_servos(75)
 
 # Move servos back to 0 degrees
 move_servos(0)
@@ -41,7 +65,7 @@ move_servos(90)
 move_servos(0)
 
 # Move servos to 180 degrees
-move_servos(90)
+move_servos(105)
 
 # Move servos back to 0 degrees
 move_servos(0)
