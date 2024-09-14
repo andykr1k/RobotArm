@@ -34,5 +34,17 @@ move_servos(90)
 # Move servos back to 0 degrees
 move_servos(0)
 
+# Move servos to 180 degrees
+move_servos(90)
+
+# Move servos back to 0 degrees
+move_servos(0)
+
+# Move servos to 180 degrees
+move_servos(90)
+
+# Move servos back to 0 degrees
+move_servos(0)
+
 # Stop the PCA9685 (optional cleanup)
 pca.deinit()
