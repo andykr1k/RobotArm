@@ -30,6 +30,8 @@ hands = mp_hands.Hands(min_detection_confidence=0.7,
 mp_drawing = mp.solutions.drawing_utils
 
 # Function to calculate angle between three points (joint, p1, p2)
+
+
 def calculate_angle(joint, p1, p2):
     # Vector from joint to p1
     v1 = np.array([p1[0] - joint[0], p1[1] - joint[1]])
@@ -116,9 +118,9 @@ while cap.isOpened():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             cv2.putText(frame, f'{int(angle_base)} deg', (points[0][0] - 70, points[0][1] + 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            
-            tip.angle(180 - angle_top)
-            mid.angle(180 - angle_middle)
+
+            tip.angle = 180 - angle_top
+            mid.angle = 180 - angle_middle
             time.sleep(1)
             # arm.move_tip_joint(angle_top)
             # arm.move_middle_joint(angle_middle)
