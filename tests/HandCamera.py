@@ -20,7 +20,7 @@ def calculate_angle(joint, p1, p2):
 
 
 # Start capturing video from the webcam
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 
 while cap.isOpened():
     ret, frame = cap.read()
