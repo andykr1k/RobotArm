@@ -10,7 +10,7 @@ pca.frequency = 50  # Set frequency to 50Hz for servos
 
 # Set min_pulse and max_pulse for 180-degree movement
 min_pulse = 500   # ~1ms pulse width (0 degrees)
-max_pulse = 1200  # ~2.4ms pulse width (180 degrees)
+max_pulse = 2400  # ~2.4ms pulse width (180 degrees)
 
 # Create servo objects for channels 4, 5, and 6 with the adjusted pulse range
 servo4 = servo.Servo(pca.channels[4], min_pulse=min_pulse, max_pulse=max_pulse)
