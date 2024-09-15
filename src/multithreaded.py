@@ -26,6 +26,7 @@ def read_from_esp():
         if line:
             print(f"Received from ESP: {line}")
 
+
 def calculate_angle(joint, p1, p2):
     v1 = np.array([p1[0] - joint[0], p1[1] - joint[1]])
     v2 = np.array([p2[0] - joint[0], p2[1] - joint[1]])
@@ -34,12 +35,13 @@ def calculate_angle(joint, p1, p2):
     return np.degrees(angle)
 
 
-def send_command_to_esp(motor1, angle1, motor2, angle2):
+def send_command_to_esp(motor_angle_pairs):
     command_parts = []
-    if angle1 is not None:
-        command_parts.append(f'{motor1}:{180 - int(angle1)}')
-    if angle2 is not None:
-        command_parts.append(f'{motor2}:{180 - int(angle2)}')
+
+    for motor, angle in motor_angle_pairs:
+        if angle is not None:
+            command_parts.append(f'{motor}:{180 - int(angle)}')
+
     command = '{' + '},{'.join(command_parts) + '}\n'
 
     try:
@@ -50,109 +52,119 @@ def send_command_to_esp(motor1, angle1, motor2, angle2):
 
 
 def motor_control_worker(angles_queue):
-    last_angles = {4: None, 5: None}
+    last_angles = {15: None, 7: None, 11: None}
 
     while True:
         if not angles_queue.empty():
-            motor1, angle1, motor2, angle2 = angles_queue.get()
+            # tip_motor, tip_angle, mid_motor, mid_angle, base_motor, base_angle = angles_queue.get()
 
-            last_angle1 = last_angles.get(motor1)
-            if last_angle1 is None or abs(angle1 - last_angle1) > 5:
-                last_angles[motor1] = angle1
-            else:
-                print(
-                    f'Angle change for motor {motor1} is less than 5 degrees; skipping command.')
+            mid_motor, mid_angle = angles_queue.get()
 
-            last_angle2 = last_angles.get(motor2)
-            if last_angle2 is None or abs(angle2 - last_angle2) > 5:
-                last_angles[motor2] = angle2
-            else:
-                print(
-                    f'Angle change for motor {motor2} is less than 5 degrees; skipping command.')
+            # last_angle = last_angles.get(tip_motor)
+            # if last_angle is None or abs(tip_angle - last_angle) > 5:
+            #     last_angles[tip_motor] = tip_angle
+            # else:
+            #     print(
+            #         f'Angle change for motor {tip_motor} is less than 5 degrees; skipping command.')
 
+            # last_angle = last_angles.get(mid_motor)
+            # if last_angle is None or abs(mid_angle - last_angle) > 5:
+            #     last_angles[mid_motor] = mid_angle
+            # else:
+            #     print(
+            #         f'Angle change for motor {mid_motor} is less than 5 degrees; skipping command.')
+
+            # last_angle = last_angles.get(base_motor)
+            # if last_angle is None or abs(base_angle - last_angle) > 5:
+            #     last_angles[base_motor] = base_angle
+            # else:
+            #     print(
+            #         f'Angle change for motor {base_motor} is less than 5 degrees; skipping command.')
+
+            # send_command_to_esp(
+            #     [(tip_motor, last_angles[tip_motor]), (mid_motor, last_angles[mid_motor]), (base_motor, last_angles[base_motor])])
+            
             send_command_to_esp(
-                motor1, last_angles[motor1], motor2, last_angles[motor2])
-
-            time.sleep(1)
-
-            read_from_esp()
+                [(mid_motor, mid_angle)])
 
 
 def hand_tracking(angles_queue):
+    send_command_to_esp([(7, 180), (11, 180), (15, 180)])
     cap = cv2.VideoCapture(0)
-    frame_rate = 10
-    frame_delay = 1.0 / frame_rate
-
-    prev_time = time.time()
-
+    frames = 0
     while cap.isOpened():
-        current_time = time.time()
-        elapsed_time = current_time - prev_time
+        frames += 1
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-        if elapsed_time >= frame_delay:
-            prev_time = current_time
+        frame = cv2.flip(frame, 1)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = hands.process(rgb_frame)
+        hand_detected = False
 
-            ret, frame = cap.read()
-            if not ret:
-                break
+        if results.multi_hand_landmarks:
+            hand_detected = True
+            for hand_landmarks in results.multi_hand_landmarks:
+                index_mcp = [hand_landmarks.landmark[5].x,
+                             hand_landmarks.landmark[5].y]
+                index_pip = [hand_landmarks.landmark[6].x,
+                             hand_landmarks.landmark[6].y]
+                index_dip = [hand_landmarks.landmark[7].x,
+                             hand_landmarks.landmark[7].y]
+                index_tip = [hand_landmarks.landmark[8].x,
+                             hand_landmarks.landmark[8].y]
+                wrist = [hand_landmarks.landmark[0].x,
+                         hand_landmarks.landmark[0].y]
 
-            frame = cv2.flip(frame, 1)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb_frame)
+                height, width, _ = frame.shape
+                points = [index_mcp, index_pip,
+                          index_dip, index_tip, wrist]
+                points = [(int(point[0] * width), int(point[1] * height))
+                          for point in points]
 
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    index_mcp = [hand_landmarks.landmark[5].x,
-                                 hand_landmarks.landmark[5].y]
-                    index_pip = [hand_landmarks.landmark[6].x,
-                                 hand_landmarks.landmark[6].y]
-                    index_dip = [hand_landmarks.landmark[7].x,
-                                 hand_landmarks.landmark[7].y]
-                    index_tip = [hand_landmarks.landmark[8].x,
-                                 hand_landmarks.landmark[8].y]
-                    wrist = [hand_landmarks.landmark[0].x,
-                             hand_landmarks.landmark[0].y]
+                for i in range(len(points) - 2):
+                    cv2.line(frame, points[i],
+                             points[i + 1], (0, 0, 255), 2)
 
-                    height, width, _ = frame.shape
-                    points = [index_mcp, index_pip,
-                              index_dip, index_tip, wrist]
-                    points = [(int(point[0] * width), int(point[1] * height))
-                              for point in points]
+                for point in points:
+                    cv2.circle(frame, point, 5, (0, 255, 0), -1)
 
-                    for i in range(len(points) - 1):
-                        cv2.line(frame, points[i],
-                                 points[i + 1], (0, 0, 255), 2)
+                angle_top = calculate_angle(
+                    points[2], points[1], points[3])
+                angle_middle = calculate_angle(
+                    points[1], points[0], points[2])
+                angle_base = calculate_angle(
+                    points[0], points[1], points[4])
 
-                    for point in points:
-                        cv2.circle(frame, point, 5, (0, 255, 0), -1)
+                # Display angles on the frame next to each point
+                cv2.putText(frame, f'{int(angle_top)} deg', (points[2][0] - 70, points[2][1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(frame, f'{int(angle_middle)} deg', (points[1][0] - 70, points[1][1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(frame, f'{int(angle_base)} deg', (points[0][0] - 70, points[0][1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-                    angle_top = calculate_angle(
-                        points[2], points[1], points[3])
-                    angle_middle = calculate_angle(
-                        points[1], points[0], points[2])
-                    angle_base = calculate_angle(
-                        points[0], points[1], points[4])
+                if (frames % 10):
+                    # angles_queue.put(
+                    #     (15, angle_top, 11, angle_middle, 7, angle_base))
+                    angles_queue.put(
+                        (11, angle_middle))
 
-                    cv2.putText(frame, f'{int(angle_top)} deg', (points[2][0] - 70, points[2][1] + 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                    cv2.putText(frame, f'{int(angle_middle)} deg', (points[1][0] - 70, points[1][1] + 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                    cv2.putText(frame, f'{int(angle_base)} deg', (points[0][0] - 70, points[0][1] + 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            box_color = (0, 255, 0) if hand_detected else (
+                0, 0, 255)
+            cv2.rectangle(frame, (10, 10), (160, 60),
+                          box_color, -1)
+            cv2.putText(frame, 'Hand Detected' if hand_detected else 'No Hand', (15, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-                    print(
-                        f'Calculated angles - Top: {angle_top}, Middle: {angle_middle}, Base: {angle_base}')
+        cv2.imshow('Index Finger Tracking', frame)
 
-                    angles_queue.put((5, angle_top, 4, angle_middle))
-
-            cv2.imshow('Index Finger Tracking', frame)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
     cap.release()
     cv2.destroyAllWindows()
-    send_command_to_esp(4, 180, 5, 180)
 
 
 if __name__ == "__main__":
