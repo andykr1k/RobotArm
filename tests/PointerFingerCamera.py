@@ -24,6 +24,8 @@ def calculate_angle(joint, p1, p2):
 
 # Start capturing video from the webcam
 cap = cv2.VideoCapture(0)
+hand_detected = False
+wrist_rotation = 0
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -38,9 +40,6 @@ while cap.isOpened():
 
     # Process the frame for hand detection
     results = hands.process(rgb_frame)
-
-    # Check if any hand is detected and set the status color
-    hand_detected = False
 
     if results.multi_hand_landmarks:
         hand_detected = True  # Hand is detected
@@ -103,12 +102,27 @@ while cap.isOpened():
     cv2.putText(frame, 'Hand Detected' if hand_detected else 'No Hand', (15, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
+    # Draw the status box at the top left
+    box_color = (0, 0, 255)
+    cv2.rectangle(frame, (10, 60), (160, 180), box_color, -1)  # Status box
+    cv2.putText(frame, 'Wrist Rotation:', (15, 100),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(frame, str(round(wrist_rotation, 1)), (15, 160),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
     # Display the resulting frame
     cv2.imshow('Index Finger Tracking', frame)
 
-    # Press 'q' to quit
-    if cv2.waitKey(10) & 0xFF == ord('q'):
+    # Handle key presses for wrist rotation
+    key = cv2.waitKey(10) & 0xFF
+    if key == ord('q'):
         break
+    elif key == ord('a'):
+        wrist_rotation -= 5
+    elif key == ord('d'):
+        wrist_rotation += 5
+    
+    print(wrist_rotation)
+
 
 # Release the capture and close windows
 cap.release()
