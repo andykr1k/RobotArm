@@ -31,7 +31,6 @@ class CameraProcessor:
     """
     Handles camera capture and image processing for robot arm control
     """
-
     # Define color ranges for object detection
     COLOR_RANGES = {
         'pink': ColorRange(
