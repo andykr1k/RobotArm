@@ -1,97 +1,206 @@
 import threading
 import cv2
 import numpy as np
+import time
+from typing import Tuple, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class ColorRange:
+    """Color range definition in HSV space"""
+    lower: np.ndarray
+    upper: np.ndarray
+
+
+@dataclass
+class Rectangle:
+    """Rectangle definition with x, y, width, height"""
+    x: int
+    y: int
+    width: int
+    height: int
+
+    @property
+    def center(self) -> Tuple[int, int]:
+        """Calculate center point of rectangle"""
+        return (self.x + self.width // 2, self.y + self.height // 2)
 
 
 class CameraProcessor:
-    def __init__(self, zoom_factor=2.2, x_offset=430, y_offset=140):
-        self.cap = cv2.VideoCapture(0)
+    """
+    Handles camera capture and image processing for robot arm control
+    """
+
+    # Define color ranges for object detection
+    COLOR_RANGES = {
+        'pink': ColorRange(
+            lower=np.array([130, 34, 175]),
+            upper=np.array([180, 255, 255])
+        ),
+        'blue': ColorRange(
+            lower=np.array([90, 130, 128]),
+            upper=np.array([180, 255, 255])
+        )
+    }
+
+    def __init__(
+        self,
+        zoom_factor: float = 2.2,
+        x_offset: int = 430,
+        y_offset: int = 140,
+        camera_id: int = 0,
+    ):
+        """Initialize camera processor with specified parameters"""
         self.zoom_factor = zoom_factor
         self.x_offset = x_offset
         self.y_offset = y_offset
+
+        # Initialize camera
+        self.cap = cv2.VideoCapture(camera_id)
+        if not self.cap.isOpened():
+            raise RuntimeError(f"Failed to open camera {camera_id}")
+
+        # Initialize state
         self.running = True
-        self.frame = np.zeros((128, 128, 3), dtype=np.uint8)
+        self.frame = None
         self.lock = threading.Lock()
+
+        # Start capture thread
         self.capture_thread = threading.Thread(target=self._capture_loop)
+        self.capture_thread.daemon = True
         self.capture_thread.start()
 
-    def _capture_loop(self):
+    def _capture_loop(self) -> None:
+        """Continuous camera capture loop"""
         while self.running:
             ret, frame = self.cap.read()
             if ret:
-                zoomed_frame = self.zoom_camera(frame)
-                self.frame = self.process_image(zoomed_frame)
+                try:
+                    with self.lock:
+                        self.frame = self.zoom_camera(frame)
+                except Exception as e:
+                    print(f"Error in capture loop: {e}")
+            time.sleep(0.01)
 
-    def process_image(self, image):
-        image_resized = cv2.resize(image, (128, 128)) / 255.0
-        return image_resized.reshape(1, 128, 128, 3)
-
-    def zoom_camera(self, frame):
+    def zoom_camera(self, frame: np.ndarray) -> np.ndarray:
+        """Apply zoom and offset to camera frame"""
         h, w = frame.shape[:2]
-        new_w, new_h = int(w / self.zoom_factor), int(h / self.zoom_factor)
+        new_w = int(w / self.zoom_factor)
+        new_h = int(h / self.zoom_factor)
+
+        # Validate dimensions
         if new_w <= 0 or new_h <= 0:
             return frame
+
+        # Calculate safe offsets
         x_offset = max(0, min(self.x_offset, w - new_w))
         y_offset = max(0, min(self.y_offset, h - new_h))
-        cropped_frame = frame[y_offset:y_offset +
-                              new_h, x_offset:x_offset + new_w]
-        return cv2.resize(cropped_frame, (w, h))
 
-    def capture_image(self):
+        # Crop and resize
+        cropped = frame[y_offset:y_offset + new_h, x_offset:x_offset + new_w]
+        return cv2.resize(cropped, (w, h))
+
+    def capture_image(self) -> np.ndarray:
+        """Thread-safe frame capture"""
         with self.lock:
-            return self.frame.copy()
+            if self.frame is None:
+                return np.zeros((128, 128, 3), dtype=np.uint8)
+            return cv2.resize(self.frame.copy(), (128, 128))
+        
+    def process_image(self, image):
+        """Process image for CNN"""
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = image / 255.0
+        return image
 
-    def release(self):
-        self.running = False
-        self.capture_thread.join()
-        self.cap.release()
+    def detect_largest_object(
+        self,
+        frame: np.ndarray,
+        color_range: ColorRange
+    ) -> Optional[Rectangle]:
+        """Detect largest object of specified color"""
+        try:
+            # Convert to HSV color space
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    def detect_largest_object(self, frame, lower_color, upper_color):
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, lower_color, upper_color)
-        contours, _ = cv2.findContours(
-            mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            return cv2.boundingRect(largest_contour)
-        return None
+            # Create mask for color range
+            mask = cv2.inRange(hsv, color_range.lower, color_range.upper)
 
-    def get_distance_between_objects(self, pink_rect, blue_rect):
-        if pink_rect and blue_rect:
-            pink_center = (pink_rect[0] + pink_rect[2] //
-                           2, pink_rect[1] + pink_rect[3] // 2)
-            blue_center = (blue_rect[0] + blue_rect[2] //
-                           2, blue_rect[1] + blue_rect[3] // 2)
-            return int(np.linalg.norm(np.array(pink_center) - np.array(blue_center)))
-        return None
+            # Find contours
+            contours, _ = cv2.findContours(
+                mask,
+                cv2.RETR_EXTERNAL,
+                cv2.CHAIN_APPROX_SIMPLE
+            )
 
-    def is_pink_on_blue(self, pink_rect, blue_rect):
-        if pink_rect and blue_rect:
-            return (pink_rect[0] < blue_rect[0] + blue_rect[2] and
-                    pink_rect[0] + pink_rect[2] > blue_rect[0] and
-                    pink_rect[1] < blue_rect[1] + blue_rect[3] and
-                    pink_rect[1] + pink_rect[3] > blue_rect[1])
-        return False
+            if not contours:
+                return None
 
-    def detect_objects(self, frame):
-        lower_pink = np.array([130, 34, 175])
-        upper_pink = np.array([180, 255, 255])
-        lower_blue = np.array([90, 130, 128])
-        upper_blue = np.array([180, 255, 255])
+            # Find largest contour
+            largest = max(contours, key=cv2.contourArea)
+            x, y, w, h = cv2.boundingRect(largest)
 
-        pink_rect = self.detect_largest_object(frame, lower_pink, upper_pink)
-        blue_rect = self.detect_largest_object(frame, lower_blue, upper_blue)
+            return Rectangle(x, y, w, h)
 
+        except Exception as e:
+            print(f"Error in object detection: {e}")
+            return None
+
+    def detect_objects(self, frame: np.ndarray) -> Tuple[Optional[Rectangle], Optional[Rectangle]]:
+        """Detect pink and blue objects in frame"""
+        pink_rect = self.detect_largest_object(
+            frame, self.COLOR_RANGES['pink'])
+        blue_rect = self.detect_largest_object(
+            frame, self.COLOR_RANGES['blue'])
         return pink_rect, blue_rect
 
-    def calculate_distance(self, frame):
+    def calculate_distance(self, frame: np.ndarray) -> float:
+        """Calculate distance between pink and blue objects"""
         pink_rect, blue_rect = self.detect_objects(frame)
-        return self.get_distance_between_objects(pink_rect, blue_rect) or float('inf')
 
-    def check_if_pink_on_blue(self, frame):
+        if pink_rect and blue_rect:
+            # Calculate centers
+            pink_center = np.array(pink_rect.center)
+            blue_center = np.array(blue_rect.center)
+
+            # Calculate Euclidean distance
+            return float(np.linalg.norm(pink_center - blue_center))
+
+        return float('inf')
+
+    def check_if_pink_on_blue(self, frame: np.ndarray) -> bool:
+        """Check if pink object overlaps blue object"""
         pink_rect, blue_rect = self.detect_objects(frame)
-        return self.is_pink_on_blue(pink_rect, blue_rect)
 
-    def render_image(self, image):
-        cv2.imshow('RobotArmEnv', image)
-        cv2.waitKey(1)
+        if pink_rect and blue_rect:
+            return (
+                pink_rect.x < blue_rect.x + blue_rect.width and
+                pink_rect.x + pink_rect.width > blue_rect.x and
+                pink_rect.y < blue_rect.y + blue_rect.height and
+                pink_rect.y + pink_rect.height > blue_rect.y
+            )
+
+        return False
+
+    def release(self) -> None:
+        """Release camera resources"""
+        self.running = False
+
+        if self.capture_thread.is_alive():
+            self.capture_thread.join(timeout=1.0)
+
+        if self.cap is not None:
+            self.cap.release()
+
+    def __del__(self):
+        """Ensure resources are released"""
+        self.release()
+
+    def render_image(self, image: np.ndarray) -> None:
+        """Display image with optional debug info"""
+        try:
+            cv2.imshow('RobotArmEnv', image)
+            cv2.waitKey(1)
+        except Exception as e:
+            print(f"Error rendering image: {e}")
