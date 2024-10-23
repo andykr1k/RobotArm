@@ -40,7 +40,12 @@ def send_command_to_esp(motor_angle_pairs):
 
     for motor, angle in motor_angle_pairs:
         if angle is not None:
-            command_parts.append(f'{motor}:{180 - int(angle)}')
+            if motor == 0:
+                command_parts.append(f'{motor}:{90 - (180 - int(angle))}')
+            elif motor == 11:
+                command_parts.append(f'{motor}:{90 - (180 - int(angle))}')
+            elif motor == 15:
+                command_parts.append(f'{motor}:{180 - int(angle)}')
 
     command = '{' + '},{'.join(command_parts) + '}\n'
 
@@ -83,13 +88,13 @@ def motor_control_worker(angles_queue):
 
             # send_command_to_esp(
             #     [(tip_motor, last_angles[tip_motor]), (mid_motor, last_angles[mid_motor]), (base_motor, last_angles[base_motor])])
-            
+
             send_command_to_esp(
                 [(mid_motor, mid_angle), (tip_motor, tip_angle), (base_moter, base_angle)])
 
 
 def hand_tracking(angles_queue):
-    send_command_to_esp([(0, 90), (4, 180), (11, 180), (15, 180)])
+    send_command_to_esp([(0, 89), (11, 89), (15, 1)])
     cap = cv2.VideoCapture(0)
     frames = 0
     wrist_rotation = 0
@@ -150,7 +155,7 @@ def hand_tracking(angles_queue):
                     # angles_queue.put(
                     #     (15, angle_top, 11, angle_middle, 7, angle_base))
                     angles_queue.put(
-                        (4, angle_top, 11, angle_middle, 15, angle_base))
+                        (11, angle_top, 15, angle_middle, 0, angle_base))
 
             box_color = (0, 255, 0) if hand_detected else (
                 0, 0, 255)
@@ -168,7 +173,7 @@ def hand_tracking(angles_queue):
             wrist_rotation -= 3
         elif key == ord('d'):
             wrist_rotation += 3
-        
+
     cap.release()
     cv2.destroyAllWindows()
 
