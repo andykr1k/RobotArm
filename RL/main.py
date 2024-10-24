@@ -15,13 +15,19 @@ def setup_environment(seed: int) -> Tuple[RobotArmEnv, TD3]:
     try:
         env = RobotArmEnv()
 
+        # Reset with seed for reproducibility
+        env.reset(seed=seed)
+
+        # Get number of actions in action space
         n_actions = env.action_space.shape[-1]
+
+        # Setup action noise for exploration
         action_noise = NormalActionNoise(
             mean=np.zeros(n_actions),
             sigma=0.1 * np.ones(n_actions)
         )
 
-        # Create the model
+        # Create the TD3 model
         model = TD3(
             policy=CustomCnnTD3Policy,
             env=env,
@@ -34,10 +40,6 @@ def setup_environment(seed: int) -> Tuple[RobotArmEnv, TD3]:
             batch_size=256,
             train_freq=1,
             gradient_steps=1,
-            replay_buffer_class=None,
-            replay_buffer_kwargs=None,
-            optimize_memory_usage=False,
-            policy_kwargs=None,
             tensorboard_log="./td3_robot_arm_tensorboard/",
             device='cuda' if th.cuda.is_available() else 'cpu'
         )
@@ -56,21 +58,21 @@ def train_model(
 ) -> None:
     """Train the model with checkpointing"""
     try:
-        # Setup checkpointing
+        # Setup checkpointing every `checkpoint_freq` timesteps
         checkpoint_callback = CheckpointCallback(
             save_freq=checkpoint_freq,
             save_path="./checkpoints/",
             name_prefix="td3_robot_arm"
         )
 
-        # Train the model
+        # Train the model and log progress
         model.learn(
             total_timesteps=total_timesteps,
             callback=checkpoint_callback,
             log_interval=100
         )
 
-        # Save the final model
+        # Save the final model after training completes
         model.save("td3_robot_arm_final")
 
     except Exception as e:
@@ -92,22 +94,27 @@ def evaluate_model(
             done = False
             episode_reward = 0
             step_count = 0
+            rewards = []
+            actions = []
 
             print(f"\nStarting evaluation episode {episode + 1}/{n_eval_episodes}")
 
             while not done:
+                # Get action using deterministic policy
                 action, _states = model.predict(obs, deterministic=True)
                 obs, reward, done, truncated, info = env.step(action)
+                rewards.append(reward)
+                actions.append(action)
                 episode_reward += reward
                 step_count += 1
 
-                # Print progress
+                # Print progress every 10 steps
                 if step_count % 10 == 0:
                     print(f"Step {step_count}: Reward = {reward:.3f}, "
                           f"Total Reward = {episode_reward:.3f}")
 
-                # Add timeout condition
-                if step_count >= 1000:  # Adjust timeout as needed
+                # Timeout condition for the episode
+                if step_count >= env.spec.max_episode_steps:
                     print("Episode timed out")
                     break
 
@@ -116,10 +123,12 @@ def evaluate_model(
 
             print(
                 f"Episode {episode + 1} finished with total reward: {episode_reward:.3f}")
+            print(f"Actions taken: {actions}\nRewards: {rewards}")
 
     except Exception as e:
         print(f"Error during evaluation: {e}")
     finally:
+        # Ensure environment rendering thread is safely stopped
         env.stop_render_thread()
 
 
@@ -132,15 +141,15 @@ def main():
     env = None
 
     try:
-        # Setup
+        # Setup environment and TD3 model
         print("Setting up environment and model...")
         env, model = setup_environment(seed)
 
-        # Training
+        # Start training the model
         print("\nStarting training...")
         train_model(model, total_timesteps=100000)
 
-        # Evaluation
+        # Evaluate the model after training
         print("\nStarting evaluation...")
         evaluate_model(env, model, seed)
 

@@ -99,13 +99,16 @@ class RobotArmEnv(gym.Env):
         # Wait for movement to complete
         time.sleep(5)
 
-        # Get new state
+        # Get new state asynchronously
         state = self.camera_processor.capture_image()
-        processed_state = self.camera_processor.process_image(state)
+        future = self.camera_processor.detect_objects_async(state)
+
+        # Wait for detection to complete
+        pink_rect, blue_rect = future.result()
 
         # Calculate reward and check completion
-        reward = self.calculate_reward(state)
-        done = self.check_done(state)
+        reward = self.calculate_reward(pink_rect, blue_rect)
+        done = self.check_done(pink_rect, blue_rect)
 
         # Update internal state
         with self.lock:
@@ -126,7 +129,7 @@ class RobotArmEnv(gym.Env):
             "arm_angles": self.arm_angles.tolist()
         }
 
-        return processed_state, reward, done, False, info
+        return state, reward, done, False, info
 
     def render(self) -> None:
         """Render environment state"""
@@ -181,7 +184,6 @@ class RobotArmEnv(gym.Env):
 
         cv2.destroyAllWindows()
 
-
     def start_render_thread(self) -> None:
         """Start the rendering thread"""
         self.render_flag = True
@@ -209,15 +211,18 @@ class RobotArmEnv(gym.Env):
         )
         send_to_esp(command)
 
-    def calculate_reward(self, state: np.ndarray) -> float:
+    def calculate_reward(self, pink_rect: Optional[Tuple[int, int, int, int]], blue_rect: Optional[Tuple[int, int, int, int]]) -> float:
         """Calculate reward based on current state"""
-        distance_from_center = self.camera_processor.calculate_distance(
-            state) + 1e-6
-        return 1 / distance_from_center
+        if pink_rect and blue_rect:
+            distance_from_center = self.camera_processor.calculate_distance(
+                pink_rect, blue_rect) + 1e-6
+            return 1 / distance_from_center
+        else:
+            return 0.0
 
-    def check_done(self, state: np.ndarray) -> bool:
+    def check_done(self, pink_rect: Optional[Tuple[int, int, int, int]], blue_rect: Optional[Tuple[int, int, int, int]]) -> bool:
         """Check if episode is complete"""
-        return self.camera_processor.check_if_pink_on_blue(state)
+        return self.camera_processor.check_if_pink_on_blue(pink_rect, blue_rect)
 
     def close(self) -> None:
         """Clean up resources"""

@@ -4,6 +4,7 @@ import numpy as np
 import time
 from typing import Tuple, Optional
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 
 
 @dataclass
@@ -31,7 +32,6 @@ class CameraProcessor:
     """
     Handles camera capture and image processing for robot arm control
     """
-    # Define color ranges for object detection
     COLOR_RANGES = {
         'pink': ColorRange(
             lower=np.array([130, 34, 175]),
@@ -43,14 +43,7 @@ class CameraProcessor:
         )
     }
 
-    def __init__(
-        self,
-        zoom_factor: float = 2.2,
-        x_offset: int = 430,
-        y_offset: int = 140,
-        camera_id: int = 0,
-    ):
-        """Initialize camera processor with specified parameters"""
+    def __init__(self, zoom_factor: float = 2.2, x_offset: int = 430, y_offset: int = 140, camera_id: int = 0):
         self.zoom_factor = zoom_factor
         self.x_offset = x_offset
         self.y_offset = y_offset
@@ -64,6 +57,9 @@ class CameraProcessor:
         self.running = True
         self.frame = None
         self.lock = threading.Lock()
+
+        # Thread pool for processing tasks
+        self.executor = ThreadPoolExecutor(max_workers=4)  # Using 4 threads
 
         # Start capture thread
         self.capture_thread = threading.Thread(target=self._capture_loop)
@@ -88,15 +84,12 @@ class CameraProcessor:
         new_w = int(w / self.zoom_factor)
         new_h = int(h / self.zoom_factor)
 
-        # Validate dimensions
         if new_w <= 0 or new_h <= 0:
             return frame
 
-        # Calculate safe offsets
         x_offset = max(0, min(self.x_offset, w - new_w))
         y_offset = max(0, min(self.y_offset, h - new_h))
 
-        # Crop and resize
         cropped = frame[y_offset:y_offset + new_h, x_offset:x_offset + new_w]
         return cv2.resize(cropped, (w, h))
 
@@ -106,42 +99,31 @@ class CameraProcessor:
             if self.frame is None:
                 return np.zeros((128, 128, 3), dtype=np.uint8)
             return cv2.resize(self.frame.copy(), (128, 128))
-        
+
     def process_image(self, image):
         """Process image for CNN"""
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = image / 255.0
         return image
 
-    def detect_largest_object(
-        self,
-        frame: np.ndarray,
-        color_range: ColorRange
-    ) -> Optional[Rectangle]:
+    def detect_objects_async(self, frame: np.ndarray):
+        """Detect pink and blue objects asynchronously"""
+        return self.executor.submit(self.detect_objects, frame)
+
+    def detect_largest_object(self, frame: np.ndarray, color_range: ColorRange) -> Optional[Rectangle]:
         """Detect largest object of specified color"""
         try:
-            # Convert to HSV color space
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-            # Create mask for color range
             mask = cv2.inRange(hsv, color_range.lower, color_range.upper)
-
-            # Find contours
             contours, _ = cv2.findContours(
-                mask,
-                cv2.RETR_EXTERNAL,
-                cv2.CHAIN_APPROX_SIMPLE
-            )
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             if not contours:
                 return None
 
-            # Find largest contour
             largest = max(contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(largest)
-
             return Rectangle(x, y, w, h)
-
         except Exception as e:
             print(f"Error in object detection: {e}")
             return None
@@ -157,33 +139,14 @@ class CameraProcessor:
     def calculate_distance(self, frame: np.ndarray) -> float:
         """Calculate distance between pink and blue objects"""
         pink_rect, blue_rect = self.detect_objects(frame)
-
         if pink_rect and blue_rect:
-            # Calculate centers
             pink_center = np.array(pink_rect.center)
             blue_center = np.array(blue_rect.center)
-
-            # Calculate Euclidean distance
             return float(np.linalg.norm(pink_center - blue_center))
-
         return float('inf')
 
-    def check_if_pink_on_blue(self, frame: np.ndarray) -> bool:
-        """Check if pink object overlaps blue object"""
-        pink_rect, blue_rect = self.detect_objects(frame)
-
-        if pink_rect and blue_rect:
-            return (
-                pink_rect.x < blue_rect.x + blue_rect.width and
-                pink_rect.x + pink_rect.width > blue_rect.x and
-                pink_rect.y < blue_rect.y + blue_rect.height and
-                pink_rect.y + pink_rect.height > blue_rect.y
-            )
-
-        return False
-
     def release(self) -> None:
-        """Release camera resources"""
+        """Release camera resources and shutdown executor"""
         self.running = False
 
         if self.capture_thread.is_alive():
@@ -192,14 +155,8 @@ class CameraProcessor:
         if self.cap is not None:
             self.cap.release()
 
-    def __del__(self):
-        """Ensure resources are released"""
-        self.release()
+        # Shutdown ThreadPoolExecutor
+        self.executor.shutdown(wait=True)
 
-    def render_image(self, image: np.ndarray) -> None:
-        """Display image with optional debug info"""
-        try:
-            cv2.imshow('RobotArmEnv', image)
-            cv2.waitKey(1)
-        except Exception as e:
-            print(f"Error rendering image: {e}")
+    def __del__(self):
+        self.release()
