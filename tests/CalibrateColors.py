@@ -13,9 +13,12 @@ cv2.namedWindow('result')
 h, s, v = 100, 100, 100
 
 # Creating track bar
-cv2.createTrackbar('h', 'result', 0, 179, nothing)
+cv2.createTrackbar('h', 'result', 0, 255, nothing)
 cv2.createTrackbar('s', 'result', 0, 255, nothing)
 cv2.createTrackbar('v', 'result', 0, 255, nothing)
+cv2.createTrackbar('he', 'result', 0, 255, nothing)
+cv2.createTrackbar('se', 'result', 0, 255, nothing)
+cv2.createTrackbar('ve', 'result', 0, 255, nothing)
 
 zoom_factor = 1.0
 x_offset, y_offset = 0, 0
@@ -48,8 +51,12 @@ while (1):
     s = cv2.getTrackbarPos('s', 'result')
     v = cv2.getTrackbarPos('v', 'result')
 
+    he = cv2.getTrackbarPos('he', 'result')
+    se = cv2.getTrackbarPos('se', 'result')
+    ve = cv2.getTrackbarPos('ve', 'result')
+
     lower_blue = np.array([h, s, v])
-    upper_blue = np.array([180, 255, 255])
+    upper_blue = np.array([he, se, ve])
 
     mask = cv2.inRange(hsv, lower_blue, upper_blue)
 

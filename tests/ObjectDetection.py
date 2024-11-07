@@ -59,11 +59,15 @@ while cap.isOpened():
     upper_pink = np.array([180, 255, 255])
     lower_blue = np.array([90, 130, 128])
     upper_blue = np.array([180, 255, 255])
+    lower_white = np.array([0, 0, 152])
+    upper_white = np.array([165, 40, 255])
     frame = zoom_camera(frame, zoom_factor, x_offset, y_offset)
     pink_rect = detect_largest_object(
         frame, lower_pink, upper_pink, grid_color=(255, 0, 0))
     blue_rect = detect_largest_object(
         frame, lower_blue, upper_blue, grid_color=(0, 255, 0))
+    # white_rect = detect_largest_object(
+    #     frame, lower_white, upper_white, grid_color=(0, 0, 255))
     distance_text = ""
     on_blue_text = ""
     if pink_rect and blue_rect:
