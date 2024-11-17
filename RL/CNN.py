@@ -1,86 +1,38 @@
 import gymnasium as gym
-import torch as th
-import torch.nn as nn
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+import tensorflow as tf
+from stable_baselines3.common.policies import BaseFeaturesExtractor
 from stable_baselines3.td3.policies import TD3Policy
 
 
 class CustomCNN(BaseFeaturesExtractor):
-    """
-    Custom CNN architecture for processing image observations in reinforcement learning.
-    
-    Architecture:
-    1. Three convolutional layers with increasing channels (32->64->128)
-    2. Adaptive max pooling to reduce spatial dimensions
-    3. Flattening layer
-    4. Final linear layer to project to desired feature dimension
-    
-    Args:
-        observation_space (gym.spaces.Box): The observation space of the environment
-        features_dim (int): Number of features to extract (default: 512)
-    """
-
+    """Custom CNN architecture"""
     def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 512):
         super(CustomCNN, self).__init__(observation_space, features_dim)
-        n_input_channels = observation_space.shape[0]
+        self.cnn = tf.keras.Sequential([
+            tf.keras.layers.InputLayer(
+                input_shape=observation_space.shape),
+            tf.keras.layers.Conv2D(
+                1024, kernel_size=3, strides=2, padding='same', activation='relu'),
+            tf.keras.layers.Conv2D(
+                512, kernel_size=3, strides=2, padding='same', activation='relu'),
+            tf.keras.layers.Conv2D(
+                256, kernel_size=3, strides=1, padding='same', activation='relu'),
+            tf.keras.layers.GlobalMaxPooling2D(),
+        ])
 
-        # CNN architecture
-        self.cnn = nn.Sequential(
-            # Layer 1: (N, n_input_channels, H, W) -> (N, 32, H/2, W/2)
-            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            # Layer 2: (N, 32, H/2, W/2) -> (N, 64, H/4, W/4)
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            # Layer 3: (N, 64, H/4, W/4) -> (N, 128, H/4, W/4)
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            # Adaptive pooling to fixed size
-            nn.AdaptiveMaxPool2d((4, 4)),
-            nn.Flatten(),
-        )
 
-        # Compute the flatten size dynamically
-        with th.no_grad():
-            n_flatten = self.cnn(
-                th.as_tensor(observation_space.sample()[None]).float()
-            ).shape[1]
+        self.linear = tf.keras.Sequential([
+            tf.keras.layers.Dense(features_dim, activation='relu')
+        ])
 
-        # Final linear layer to get desired feature dimension
-        self.linear = nn.Sequential(
-            nn.Linear(n_flatten, features_dim),
-            nn.ReLU(),
-        )
-
-        # Optional: Initialize weights
-        self.apply(self._init_weights)
-
-    def _init_weights(self, module):
-        """Initialize network weights using Xavier initialization."""
-        if isinstance(module, (nn.Conv2d, nn.Linear)):
-            nn.init.xavier_uniform_(module.weight)
-            if module.bias is not None:
-                nn.init.constant_(module.bias, 0.0)
-
-    def forward(self, observations: th.Tensor) -> th.Tensor:
-        """
-        Process the observations through the CNN and linear layers.
-        
-        Args:
-            observations (torch.Tensor): Input tensor of shape (batch_size, channels, height, width)
-        
-        Returns:
-            torch.Tensor: Extracted features of shape (batch_size, features_dim)
-        """
-        return self.linear(self.cnn(observations))
+    def call(self, observations: tf.Tensor) -> tf.Tensor:
+        """Process the observations through the CNN and linear layers."""
+        x = self.cnn(observations)
+        return self.linear(x)
 
 
 class CustomCnnTD3Policy(TD3Policy):
-    """
-    Custom TD3 policy that uses the CustomCNN features extractor.
-    
-    This policy can be used with environments that have image observations.
-    """
+    """Custom TD3 policy that uses the CustomCNN features extractor."""
     def __init__(self, *args, **kwargs):
         super(CustomCnnTD3Policy, self).__init__(
             *args,

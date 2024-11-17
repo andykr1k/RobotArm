@@ -5,10 +5,8 @@ from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.callbacks import CheckpointCallback
 from CNN import CustomCnnTD3Policy
 from RobotGym import RobotArmEnv
-import time
 import sys
 from typing import Tuple
-import multiprocessing as mp
 import logging
 
 # Set up logging
@@ -21,8 +19,7 @@ tb_log = './logs/tensorboard'
 def setup_environment(seed: int) -> Tuple[RobotArmEnv, TD3]:
     """Setup the environment and TD3 model"""
     try:
-        # Set render mode for visualization
-        env = RobotArmEnv(render_mode="human")
+        env = RobotArmEnv()
 
         # Reset with seed for reproducibility
         env.reset(seed=seed)
@@ -44,7 +41,7 @@ def setup_environment(seed: int) -> Tuple[RobotArmEnv, TD3]:
             verbose=1,
             seed=seed,
             learning_rate=3e-4,
-            buffer_size=100000,
+            buffer_size=20000,
             learning_starts=1000,
             batch_size=256,
             train_freq=1,
@@ -58,18 +55,6 @@ def setup_environment(seed: int) -> Tuple[RobotArmEnv, TD3]:
     except Exception as e:
         logger.error(f"Error during setup: {e}")
         sys.exit(1)
-
-
-def render_process(env):
-    """Separate process to handle environment rendering"""
-    try:
-        while True:
-            env.render()
-            time.sleep(1.0 / env.metadata['render_fps'])
-    except Exception as e:
-        logger.error(f"Error in rendering process: {e}")
-    finally:
-        env.close()
 
 
 def train_model(
@@ -86,10 +71,6 @@ def train_model(
             save_path="./checkpoints/",
             name_prefix="td3_robot_arm"
         )
-
-        # Create separate process for rendering
-        render_proc = mp.Process(target=render_process, args=(env,))
-        render_proc.start()
 
         # Train the model and log progress
         model.learn(
@@ -108,8 +89,6 @@ def train_model(
         raise
     finally:
         # Ensure environment rendering thread is stopped gracefully
-        render_proc.terminate()
-        render_proc.join()
         env.close()
 
 
