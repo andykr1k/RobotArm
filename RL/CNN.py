@@ -5,7 +5,6 @@ from stable_baselines3.td3.policies import TD3Policy
 
 
 class CustomCNN(BaseFeaturesExtractor):
-    """Custom CNN architecture"""
     def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 512):
         super(CustomCNN, self).__init__(observation_space, features_dim)
         self.cnn = tf.keras.Sequential([
@@ -26,13 +25,11 @@ class CustomCNN(BaseFeaturesExtractor):
         ])
 
     def call(self, observations: tf.Tensor) -> tf.Tensor:
-        """Process the observations through the CNN and linear layers."""
         x = self.cnn(observations)
         return self.linear(x)
 
 
 class CustomCnnTD3Policy(TD3Policy):
-    """Custom TD3 policy that uses the CustomCNN features extractor."""
     def __init__(self, *args, **kwargs):
         super(CustomCnnTD3Policy, self).__init__(
             *args,

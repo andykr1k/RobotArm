@@ -9,7 +9,6 @@ import sys
 from typing import Tuple
 import logging
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -21,19 +20,15 @@ def setup_environment(seed: int) -> Tuple[RobotArmEnv, TD3]:
     try:
         env = RobotArmEnv()
 
-        # Reset with seed for reproducibility
         env.reset(seed=seed)
 
-        # Get number of actions in action space
         n_actions = env.action_space.shape[-1]
 
-        # Setup action noise for exploration
         action_noise = NormalActionNoise(
             mean=np.zeros(n_actions),
             sigma=0.1 * np.ones(n_actions)
         )
 
-        # Create the TD3 model
         model = TD3(
             policy=CustomCnnTD3Policy,
             env=env,
@@ -65,14 +60,12 @@ def train_model(
 ) -> None:
     """Train the model with checkpointing"""
     try:
-        # Setup checkpointing every `checkpoint_freq` timesteps
         checkpoint_callback = CheckpointCallback(
             save_freq=checkpoint_freq,
             save_path="./checkpoints/",
             name_prefix="td3_robot_arm"
         )
 
-        # Train the model and log progress
         model.learn(
             total_timesteps=total_timesteps,
             callback=[checkpoint_callback],
@@ -80,7 +73,6 @@ def train_model(
             tb_log_name="train"
         )
 
-        # Save the final model after training completes
         model.save("td3_robot_arm_final")
 
     except Exception as e:
@@ -88,7 +80,6 @@ def train_model(
         model.save("td3_robot_arm_backup")
         raise
     finally:
-        # Ensure environment rendering thread is stopped gracefully
         env.close()
 
 
@@ -101,11 +92,9 @@ def main():
     env = None
 
     try:
-        # Setup environment and TD3 model
         logger.info("Setting up environment and model...")
         env, model = setup_environment(seed)
 
-        # Start training the model
         logger.info("\nStarting training...")
         train_model(model, env, total_timesteps=100000)
 

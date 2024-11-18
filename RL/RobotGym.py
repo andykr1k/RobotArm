@@ -50,9 +50,9 @@ class RobotArmEnv(gym.Env):
     Handles robot arm control and camera-based observations
     """
     DEFAULT_CONFIG = ArmConfig(
-        initial_angles=np.array([90, 120, 0, 90, 0], dtype=np.float64),
-        min_angles=np.array([0, 60, 0, 0, 0], dtype=np.float64),
-        max_angles=np.array([180, 120, 45, 120, 90], dtype=np.float64)
+        initial_angles=np.array([90, 90, 90, 90, 90, 90], dtype=np.float64),
+        min_angles=np.array([0, 0, 0, 0, 0, 20], dtype=np.float64),
+        max_angles=np.array([180, 180, 180, 180, 180, 160], dtype=np.float64)
     )
 
     def __init__(
@@ -115,12 +115,12 @@ class RobotArmEnv(gym.Env):
             try:
                 command = (
                     '{' +
-                    f'0:{self.arm_angles[0]},' +
-                    f'3:{self.arm_angles[1]},' +
-                    f'7:{180 - self.arm_angles[1]},' +
-                    f'11:{self.arm_angles[2]},' +
-                    f'13:{self.arm_angles[3]},' +
-                    f'15:{self.arm_angles[4]}' +
+                    f'0:{int(self.arm_angles[0])},' +
+                    f'4:{int(self.arm_angles[1])},' +
+                    f'7:{int(self.arm_angles[2])},' +
+                    f'8:{int(self.arm_angles[3])},' +
+                    f'11:{int(self.arm_angles[4])},' +
+                    f'15:{int(self.arm_angles[5])}' +
                     '}'
                 )
                 send_to_esp(command)
