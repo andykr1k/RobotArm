@@ -31,34 +31,33 @@ class ArmConfig:
 
 
 class RewardConfig(NamedTuple):
-    gripper_completion_threshold: float = 25.0
-    gripper_very_close_threshold: float = 40.0
-    gripper_close_threshold: float = 80.0
-    gripper_medium_threshold: float = 120.0
-    gripper_far_threshold: float = 200.0
-    gripper_very_close_reward: float = 10.0
-    gripper_close_reward: float = 5.0
-    gripper_medium_reward: float = -1.0
-    gripper_far_reward: float = -3.0
-    gripper_completion_reward: float = 15.0
+    max_reward_distance: float = 700.0
+    min_reward_distance: float = 25.0
+    max_distance_reward: float = 10.0
+    min_distance_reward: float = -10.0
 
-    very_close_threshold: float = 60.0
-    close_threshold: float = 100.0
-    medium_threshold: float = 150.0
-    far_threshold: float = 200.0
-    very_close_reward: float = 10.0
-    close_reward: float = 5.0
-    medium_reward: float = -1.0
-    far_reward: float = -5.0
-    completion_reward: float = 50.0
+    max_gripper_distance: float = 700.0
+    min_gripper_distance: float = 25.0
+    max_gripper_reward: float = 10.0
+    min_gripper_reward: float = -10.0
+
+
+def scale_reward(value: float, max_value: float, min_value: float, max_reward: float, min_reward: float) -> float:
+    if value <= min_value:
+        return max_reward
+    elif value >= max_value:
+        return min_reward
+    result = ((max_value - value) / (max_value - min_value)) * \
+        (max_reward - min_reward) + min_reward
+    return round(result, 3)
 
 
 
 class RobotArmEnv(gym.Env):
     DEFAULT_CONFIG = ArmConfig(
         initial_angles=np.array([90, 90, 90, 90, 90, 90], dtype=np.float64),
-        min_angles=np.array([0, 0, 0, 0, 0, 20], dtype=np.float64),
-        max_angles=np.array([180, 180, 180, 180, 180, 160], dtype=np.float64)
+        min_angles=np.array([0, 30, 0, 0, 0, 20], dtype=np.float64),
+        max_angles=np.array([180, 90, 180, 180, 180, 160], dtype=np.float64)
     )
 
     def __init__(
@@ -194,7 +193,7 @@ class RobotArmEnv(gym.Env):
         try:
             data = requests.get('http://100.69.34.11:5000/info').json()
             reward = self._calculate_reward(
-                data.get('distance_from_pink_to_blue'), data.get('right_gripper_distance'), data.get('left_gripper_distance'), data.get('on_blue'))
+                data.get('distance'), data.get('right_gripper_distance'), data.get('left_gripper_distance'))
 
             on_blue = data.get('on_blue')
 
@@ -209,35 +208,34 @@ class RobotArmEnv(gym.Env):
             logger.error(f"Error in _calculate_step_results: {e}")
             return 0.0, False
 
-
     def _calculate_reward(self, distance: float, right_gripper: float, left_gripper: float) -> float:
-        reward = 0.0
+        # Calculate distance-based reward
+        distance_reward = scale_reward(
+            distance,
+            self.reward_config.max_reward_distance,
+            self.reward_config.min_reward_distance,
+            self.reward_config.max_distance_reward,
+            self.reward_config.min_distance_reward
+        )
 
-        if distance < self.reward_config.very_close_threshold:
-            distance_reward = self.reward_config.very_close_reward
-        elif distance < self.reward_config.close_threshold:
-            distance_reward = self.reward_config.close_reward
-        elif distance < self.reward_config.medium_threshold:
-            distance_reward = self.reward_config.medium_reward
-        else:
-            distance_reward = self.reward_config.far_reward
-
+        # Calculate gripper-based reward
         gripper_distance = max(right_gripper, left_gripper)
-        if gripper_distance < self.reward_config.gripper_completion_threshold:
-            gripper_reward = self.reward_config.gripper_completion_reward
-        if gripper_distance < self.reward_config.gripper_very_close_threshold:
-            gripper_reward = self.reward_config.gripper_very_close_reward
-        elif gripper_distance < self.reward_config.gripper_close_threshold:
-            gripper_reward = self.reward_config.gripper_close_reward
-        elif gripper_distance < self.reward_config.gripper_medium_threshold:
-            gripper_reward = self.reward_config.gripper_medium_reward
-        else:
-            gripper_reward = self.reward_config.gripper_far_reward
+        gripper_reward = scale_reward(
+            gripper_distance,
+            self.reward_config.max_gripper_distance,
+            self.reward_config.min_gripper_distance,
+            self.reward_config.max_gripper_reward,
+            self.reward_config.min_gripper_reward
+        )
 
-        reward += distance_reward + gripper_reward
+        # Total reward
+        reward = distance_reward + gripper_reward
 
-        logger.debug(
-            f"Distance: {distance}, Distance Reward: {distance_reward}, Right Gripper: {right_gripper}, Left Gripper: {left_gripper}, Gripper Reward: {gripper_reward}, Total Reward: {reward}"
+        # Log the computation details
+        logger.info(
+            f"Distance: {distance}, Distance Reward: {distance_reward}, "
+            f"Right Gripper: {right_gripper}, Left Gripper: {left_gripper}, "
+            f"Gripper Reward: {gripper_reward}, Total Reward: {reward}"
         )
         return reward
 

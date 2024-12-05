@@ -45,7 +45,7 @@ def setup_environment(seed: int):
         ent_coef=0.01,
         vf_coef=0.5,
         max_grad_norm=0.5,
-        tensorboard_log="./ppo_logs/",
+        tensorboard_log="./logs/tensorboard/",
         device='cuda' if th.cuda.is_available() else 'cpu'
     )
     logger.info("PPO model initialized with CNN policy.")
