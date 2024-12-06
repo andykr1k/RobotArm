@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from MotorController import send_to_esp, close_connection
 import requests
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from io import BytesIO
 
 logging.basicConfig(level=logging.INFO)
@@ -147,7 +147,7 @@ class RobotArmEnv(gym.Env):
 
         state, res = self._get_observation()
         reward, done = self._calculate_step_results(state)
-        self.upload_image(res.content, reward, current_time, self.arm_angles.tolist())
+        # self.upload_image(res.content, reward, current_time, self.arm_angles.tolist())
 
         done = bool(done)
 
@@ -168,27 +168,41 @@ class RobotArmEnv(gym.Env):
             f"Angles: {self.arm_angles.tolist()}"
         )
 
-        # Modify the return to match Gym v26 API
         return state, reward, done, False, info
 
     def _get_observation(self) -> np.ndarray:
-        try:
-            result = requests.get(
-                'http://100.69.34.11:5000/pic_feed_OD', timeout=5)
+        max_retries = 3
+        retry_delay = 2
 
-            if result.status_code != 200:
-                logger.error(f"Failed to fetch image. Status code: {result.status_code}")
-                return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+        for attempt in range(max_retries):
+            try:
+                result = requests.get(
+                    'http://100.69.34.11:5000/pic_feed_OD', timeout=5
+                )
 
-            image = Image.open(BytesIO(result.content))
+                if result.status_code != 200:
+                    logger.error(f"Failed to fetch image. Status code: {result.status_code}")
+                    continue
 
-            # Convert to numpy array in channel-last format
-            image_array = np.array(image)
+                try:
+                    image = Image.open(BytesIO(result.content))
+                    image.verify()
 
-            return image_array, result
-        except requests.RequestException as e:
-            logger.error(f"Failed to fetch observation: {e}")
-            return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+                    image = Image.open(BytesIO(result.content))
+                    image_array = np.array(image)
+                    return image_array
+                except UnidentifiedImageError as img_error:
+                    logger.error(f"Image verification failed: {img_error}")
+                    continue
+
+            except requests.RequestException as req_error:
+                logger.error(f"Request failed: {req_error}")
+
+            logger.info(f"Retrying... Attempt {attempt + 1}/{max_retries}")
+            time.sleep(retry_delay)
+
+        logger.error("Failed to fetch observation after multiple attempts.")
+        return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
 
     def upload_image(self, image_content: bytes, reward, time, angles) -> None:
         url = 'http://68.234.135.207:5000/upload'

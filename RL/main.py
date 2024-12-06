@@ -4,6 +4,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import DummyVecEnv
 from RobotGym import RobotArmEnv
+from CNN import CustomCnnPPOpolicy
 import logging
 
 logging.basicConfig(
@@ -30,11 +31,12 @@ def setup_environment(seed: int):
 
     env = DummyVecEnv([lambda: env])
 
+
     model = PPO(
-        policy="CnnPolicy",
+        policy=CustomCnnPPOpolicy,
         env=env,
         verbose=1,
-        seed=seed,
+        seed=42,
         learning_rate=5e-4,
         n_steps=2048,
         batch_size=64,
