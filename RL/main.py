@@ -35,14 +35,14 @@ def setup_environment(seed: int):
         env=env,
         verbose=1,
         seed=seed,
-        learning_rate=3e-4,
+        learning_rate=5e-4,
         n_steps=2048,
         batch_size=64,
         n_epochs=10,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.01,
+        ent_coef=0.005,
         vf_coef=0.5,
         max_grad_norm=0.5,
         tensorboard_log="./logs/tensorboard/",
@@ -52,7 +52,7 @@ def setup_environment(seed: int):
     return env, model
 
 
-def train_model(model, env, total_timesteps, checkpoint_freq=10000, callback=None):
+def train_model(model, env, total_timesteps, checkpoint_freq=1000, callback=None):
     logger.info("Starting training...")
 
     checkpoint_callback = CheckpointCallback(
@@ -97,7 +97,7 @@ def main():
             model,
             env,
             total_timesteps=10000,
-            checkpoint_freq=1000,
+            checkpoint_freq=100,
         )
 
     except KeyboardInterrupt:
