@@ -107,7 +107,7 @@ class RobotArmEnv(gym.Env):
         self.arm_angles = self.config.initial_angles.copy()
         self._send_command_with_retry()
         self._init_state()
-        state = self._get_observation()
+        state, res = self._get_observation()
         return state, {}
 
     def _send_command_with_retry(self, max_retries: int = 3) -> None:
@@ -145,8 +145,9 @@ class RobotArmEnv(gym.Env):
         self._send_command_with_retry()
         self._last_action_time = time.time()
 
-        state = self._get_observation()
+        state, res = self._get_observation()
         reward, done = self._calculate_step_results(state)
+        self.upload_image(res.content, reward, current_time, self.arm_angles.tolist())
 
         done = bool(done)
 
@@ -184,10 +185,29 @@ class RobotArmEnv(gym.Env):
             # Convert to numpy array in channel-last format
             image_array = np.array(image)
 
-            return image_array
+            return image_array, result
         except requests.RequestException as e:
             logger.error(f"Failed to fetch observation: {e}")
             return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+
+    def upload_image(self, image_content: bytes, reward, time, angles) -> None:
+        url = 'http://68.234.135.207:5000/upload'
+
+        files = {'image': (str(time) + '.jpg', image_content, 'image/jpeg')}
+        data = {
+            'reward': reward,
+            'angles': angles,
+        }
+
+        try:
+            response = requests.post(url, files=files, data=data)
+
+            if response.status_code == 200:
+                logger.info(f"Image uploaded successfully: {response.json()}")
+            else:
+                logger.error(f"Failed to upload image. Status code: {response.status_code}")
+        except requests.RequestException as e:
+            logger.error(f"Failed to upload image: {e}")
 
     def _calculate_step_results(self, state: np.ndarray) -> Tuple[float, bool]:
         try:
